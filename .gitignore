@@ -1,0 +1,10 @@
+# Python cache
+__pycache__/
+*.pyc
+
+# Output files
+slices_script/
+skull_slices/
+*.bin
+*.sl1
+*.zip
