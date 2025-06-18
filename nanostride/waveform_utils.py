@@ -27,3 +27,4 @@ def create_bidirectional_waveforms(image_dir, serpentine=True):
 def save_binary_waveform(waveform, filename):
     float_waveform_normalized = waveform.astype(np.float64) * 2 - 1
     float_waveform_normalized.astype('<f8').tofile(f"{filename}.bin")
+    #float_waveform_normalized.tofile(f"{filename}.bin")
