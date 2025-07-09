@@ -5,7 +5,7 @@ import nifgen
 import time
 import math
 
-'''def create_bidirectional_waveforms(image_dir, serpentine=True):
+def create_bidirectional_waveforms(image_dir, serpentine=True):
     waveforms = []
 
     image_files = sorted([
@@ -50,8 +50,8 @@ def create_bidirectional_waveforms(image_dir, serpentine=True):
                     waveforms.append(black)
                 else:
                     waveforms.append(white)
-        return np.concatenate(waveforms)'''
-    
+        return np.concatenate(waveforms)
+    '''
 def create_bidirectional_waveforms(image_dir,
                                   serpentine=True,
                                   pixels_per_row=120,
@@ -88,7 +88,7 @@ def create_bidirectional_waveforms(image_dir,
             wave_row = np.repeat(row, samples_per_pixel)
             waveforms.append(wave_row)
 
-    return np.concatenate(waveforms)
+    return np.concatenate(waveforms)'''
 
 def save_binary_waveform(waveform, filename):
     float_waveform_normalized = waveform.astype(np.float64) * 2 - 1
