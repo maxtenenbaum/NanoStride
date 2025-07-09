@@ -20,7 +20,7 @@ def main():
     )
 
     waveform = create_bidirectional_waveforms("skull_slices", serpentine=True)
-    save_binary_waveform(waveform, "waveform_output")
+    save_binary_waveform(waveform, "waveform_120px.bin")
 
 if __name__ == "__main__":
     main()
