@@ -1,6 +1,12 @@
 import SPiiPlusPython as sp
 import pipython
 
+
+class StageController:
+    def __init__(self, stage_port, stage_baud=115200):
+        self.hc = sp.OpenCommSerial(stage_port, stage_baud)
+
+
 class MotionController:
     def __init__(self, stage_port=1, stage_baud=115200, hexapod_port=4, hexapod_baud=115200):
         # Initialize stage
