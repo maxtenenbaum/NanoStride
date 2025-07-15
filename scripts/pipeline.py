@@ -13,7 +13,7 @@ def main():
 
     slice_and_extract(
         slicer_path=slicer_path,
-        stl_path="test_files/skull.stl",
+        stl_path="test_files/pyramid.stl",
         config_path="scripts/config.ini",
         output_dir="slices_script",
         extracted_image_dir="skull_slices",
