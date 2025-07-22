@@ -10,3 +10,4 @@ def list_com_ports():
 def show_error(msg):
     from tkinter import messagebox
     messagebox.showerror("Error", msg)
+
