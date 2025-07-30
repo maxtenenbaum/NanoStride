@@ -55,10 +55,24 @@ def update_stage_position():
     except Exception as e:
         stage_position_label.config(text="X: ---, Y: ---")
     root.after(20, update_stage_position)  # repeat every 200 ms
+
 def move_stage():
     desired_stage_x = stage_x_entry.get()
     desired_stage_y = stage_y_entry.get()
     stages.move_stage_to_point(desired_stage_x, desired_stage_y)
+
+def relative_move_stage(axis):
+    x_pos, y_pos = stages.get_stage_pos()
+    step = float(stage_step_entry.get())
+    if axis == "+Y":
+        stages.move_stage_to_point(x_pos, y_pos+step)
+    if axis == "-Y":
+        stages.move_stage_to_point(x_pos, y_pos-step)
+    if axis == "+X":
+        stages.move_stage_to_point(x_pos+step, y_pos)
+    if axis == '-X':
+        stages.move_stage_to_point(x_pos-step, y_pos)
+
 # Hexapod
 def connect_hexapod():
     selected = hexapod_port.get()
@@ -101,21 +115,18 @@ def update_hexapod_position():
     root.after(20, update_hexapod_position)
 def move_hexapod():
     def get_desired_positions():
-        desired_positions = {}
-        desired_positions['X'] = x_entry.get()
-        desired_positions['Y'] = y_entry.get()
-        desired_positions['Z'] = z_entry.get()
-        desired_positions['U'] = u_entry.get()
-        desired_positions['V'] = v_entry.get()
-        desired_positions['W'] = w_entry.get()
-        return desired_positions
+        return {
+            axis: float(entry_vars[axis].get())
+            for axis in entry_vars
+        }
     hexapod.move_hexapod(get_desired_positions())
+
 #########################################################################
 #########################################################################
 
 # GUI SETUP
 root = Tk()
-root.title("Motion Control")
+root.title("NanoStride")
 
 #########################################################################
 # Motion control frame
@@ -123,108 +134,150 @@ root.title("Motion Control")
 
 mc_frame = ttk.Frame(root, padding=10)
 mc_frame.grid(column=0, row=0,sticky=W)
-ttk.Label(mc_frame, text="Motion Control").grid(row=0, column=0, columnspan=2)
-
+ttk.Label(mc_frame, text="Device Selection").grid(row=0, column=0, sticky=W)
 #########################################################################
-# Stage connection frame
+# Connection frame
 #########################################################################
-sc_frame = ttk.Frame(mc_frame, padding=10)
-sc_frame.grid(row=1, column=0)
-ttk.Label(sc_frame, text="Stage Connection").grid(row=0, column=0, sticky=W)
-stage_port = ttk.Combobox(sc_frame, values=gui_utils.list_com_ports())
-stage_port.grid(row=1, column=0)
-stage_light = Canvas(sc_frame, width=20, height=20, highlightthickness=0)
-stage_light.grid(row=1, column=1, padx=5)
+connection_frame = ttk.Frame(mc_frame, padding=10, relief="solid", borderwidth=1)
+connection_frame.grid(row=1, column=0)
+ttk.Label(connection_frame, text='Stages: ').grid(row=1, column=0, sticky=W)
+stage_port = ttk.Combobox(connection_frame, values=gui_utils.list_com_ports())
+stage_port.grid(row=1, column=1, sticky=W, pady=2)
+stage_light = Canvas(connection_frame, width=20, height=20, highlightthickness=0)
+stage_light.grid(row=1, column=3, padx=5)
 stage_light.create_oval(2, 2, 18, 18, fill="", tags="light")
-ttk.Button(sc_frame, text='Connect', command=connect_stages).grid(row=2, column=0, pady=2, sticky=W)
-ttk.Button(sc_frame, text='Initialize', command=initialize_stages).grid(row=3, column=0, pady=2, sticky=W)
 
-#########################################################################
-# Stage movement frame ### root/mc_frame/sm_frame
-#########################################################################
-sm_frame = ttk.Frame(mc_frame, padding=10)
-sm_frame.grid(row=2, column=0)
-ttk.Label(sm_frame, text='Stage Movement').grid(row=0, column=0, sticky=W)
-stage_position_label = ttk.Label(sm_frame, text="X: ---, Y: ---")
-stage_position_label.grid(row=1, column=0, sticky=W, pady=(5, 0))
-ttk.Label(sm_frame, text="Move Stage to Position").grid(row=2, column=0, sticky=W)
-ttk.Label(sm_frame, text='X:').grid(row=3, column=0)
-stage_x_entry = ttk.Entry(sm_frame, width=5)
-stage_x_entry.grid(row=3, column=1)
-stage_x_entry.insert(0, "0")
-ttk.Label(sm_frame, text='Y:').grid(row=4, column=0)
-stage_y_entry = ttk.Entry(sm_frame, width=5)
-stage_y_entry.grid(row=4, column=1)
-stage_y_entry.insert(0, "0")
-ttk.Button(sm_frame, command=move_stage, text='Move Stage').grid(row=5, column=1, columnspan=2)
-#########################################################################
-# Hexapod connection frame ### root/mc_frame/hp_frame
-#########################################################################
-hp_frame = ttk.Frame(mc_frame, padding=10)
-hp_frame.grid(row=1, column=1)
-ttk.Label(hp_frame, text="Hexapod Connection").grid(row=0, column=0, sticky=W)
-hexapod_port = ttk.Combobox(hp_frame, values=gui_utils.list_com_ports())
-hexapod_port.grid(row=1, column=0)
-hexapod_light = Canvas(hp_frame, width=20, height=20, highlightthickness=0)
-hexapod_light.grid(row=1, column=1, padx=5)
+ttk.Label(connection_frame, text="Hexapod: ").grid(row=2, column=0, sticky=W)
+hexapod_port = ttk.Combobox(connection_frame, values=gui_utils.list_com_ports())
+hexapod_port.grid(row=2, column=1, sticky=W, pady=2)
+hexapod_light = Canvas(connection_frame, width=20, height=20, highlightthickness=0)
+hexapod_light.grid(row=2, column=3, padx=5)
 hexapod_light.create_oval(2, 2, 18, 18, fill="", tags="light")
-ttk.Button(hp_frame, text='Connect', command=connect_hexapod).grid(row=2, column=0, pady=2, sticky=W)
-ttk.Button(hp_frame, text='Initialize', command=initialize_hexapod).grid(row=3, column=0, pady=2, sticky=W)
+ttk.Button(connection_frame, text='Connect', command=connect_stages).grid(row=1, column=2, sticky=W)
+ttk.Button(connection_frame, text='Connect', command=connect_hexapod).grid(row=2, column=2, sticky=W)
 
 #########################################################################
-# Hexapod movement frame ### root/mc_frame/hm_frame
+# Movement frame, with two frames inside, one for each
 #########################################################################
-hm_frame = ttk.Frame(mc_frame, padding=10)
-hm_frame.grid(row=2, column=1)
-ttk.Label(hm_frame, text='Hexapod Movement').grid(row=0, column=0, sticky=W)
+movement_frame = ttk.Frame(mc_frame, padding=10, relief="solid", borderwidth=1)
+movement_frame.grid(row=2, column=0)
+
+sm_frame = ttk.Frame(movement_frame, relief="solid", borderwidth=1)
+sm_frame.grid(row=1, column=0)
+
+hm_frame = ttk.Frame(movement_frame, relief="solid", borderwidth=1)
+hm_frame.grid(row=3, column=0)
+
+# Absolute Stage Movements
+ttk.Label(movement_frame, text='Stage Movement').grid(row=0, column=0, sticky=W, pady=(0, 5))
+
+ttk.Label(sm_frame, text='Position:').grid(row=0, column=0, sticky=W, padx=(0, 5))
+stage_position_label = ttk.Label(sm_frame, text="X: ---, Y: ---")
+stage_position_label.grid(row=0, column=1, sticky=W, columnspan=2)
+
+ttk.Label(sm_frame, text='X:').grid(row=1, column=0, sticky=E, padx=(0, 5))
+stage_x_entry = ttk.Entry(sm_frame, width=5)
+stage_x_entry.grid(row=1, column=1, sticky=W)
+stage_x_entry.insert(0, "0")
+
+ttk.Label(sm_frame, text='Y:').grid(row=2, column=0, sticky=E, padx=(0, 5))
+stage_y_entry = ttk.Entry(sm_frame, width=5)
+stage_y_entry.grid(row=2, column=1, sticky=W)
+stage_y_entry.insert(0, "0")
+
+ttk.Button(sm_frame, command=move_stage, text='Absolute Move').grid(
+    row=3, column=0, columnspan=2, pady=(5, 0), sticky=EW
+)
+
+# Relative Stage Movements
+rsm_frame = ttk.Frame(sm_frame)
+rsm_frame.grid(row=1, column=2, rowspan=4, padx=(10, 0), sticky="n")
+
+# Directional Buttons
+stage_y_up = ttk.Button(rsm_frame, text='↑', width=3, command=lambda: relative_move_stage("+Y"))
+stage_y_up.grid(row=0, column=1, padx=1, pady=1)
+stage_y_left = ttk.Button(rsm_frame, text='←', width=3, command=lambda: relative_move_stage("-X"))
+stage_y_left.grid(row=1, column=0, padx=1, pady=1)
+stage_zero = ttk.Button(rsm_frame, text='●', width=3, command=initialize_stages)
+stage_zero.grid(row=1, column=1, padx=1, pady=1)
+stage_y_right = ttk.Button(rsm_frame, text='→', width=3, command=lambda:relative_move_stage("+X"))
+stage_y_right.grid(row=1, column=2, padx=1, pady=1)
+stage_y_down = ttk.Button(rsm_frame, text='↓', width=3, command= lambda: relative_move_stage("-Y"))
+stage_y_down.grid(row=2, column=1, padx=1, pady=1)
+# Step Size Entry
+ttk.Label(rsm_frame, text="Step (mm)").grid(row=3, column=0, columnspan=3, pady=(5, 2))
+stage_step_entry = ttk.Entry(rsm_frame, width=5, justify="center")
+stage_step_entry.grid(row=4, column=0, columnspan=3)
+stage_step_entry.insert(0, "1")  # Default increment
+
+# Hexapod movements
+ttk.Label(movement_frame, text='Hexapod Movement').grid(row=2, column=0, sticky=W, pady=(10, 5))
+
+ttk.Label(hm_frame, text='Position').grid(row=0, column=0, sticky=W)
 hexapod_position_label = ttk.Label(hm_frame, text="X: ---, Y: ---, Z: ---\nU: ---, V: ---, W: ---")
-hexapod_position_label.grid(row=1, column=0, sticky=W, pady=(5,0))
+hexapod_position_label.grid(row=0, column=1, sticky=W, columnspan=2)
+
 ttk.Label(hm_frame, text='Move to Position').grid(row=2, column=0, sticky=W)
-# X Entry
-x_entry_label = ttk.Label(hm_frame, text='X:')
-x_entry_label.grid(row=3, column=0, sticky='w')
-x_entry = ttk.Entry(hm_frame, width=5)
-x_entry.grid(row=3, column=1, sticky='w')
-x_entry.insert(0, "0")
 
-# Y Entry
-y_entry_label = ttk.Label(hm_frame, text='Y:')
-y_entry_label.grid(row=4, column=0, sticky='w')
-y_entry = ttk.Entry(hm_frame, width=5)
-y_entry.grid(row=4, column=1, sticky='w')
-y_entry.insert(0, "0")
+# Absolute Position Entries
+entries = [
+    ('X:', 3), ('Y:', 4), ('Z:', 5),
+    ('U:', 6), ('V:', 7), ('W:', 8)
+]
+entry_vars = {}
+for label, row in entries:
+    ttk.Label(hm_frame, text=label).grid(row=row, column=0, sticky=W, padx=(0, 5))
+    e = ttk.Entry(hm_frame, width=5)
+    e.grid(row=row, column=1, sticky=W)
+    e.insert(0, "0")
+    entry_vars[label.strip(':')] = e
 
-# Z Entry
-z_entry_label = ttk.Label(hm_frame, text='Z:')
-z_entry_label.grid(row=5, column=0, sticky='w')
-z_entry = ttk.Entry(hm_frame, width=5)
-z_entry.grid(row=5, column=1, sticky='w')
-z_entry.insert(0, "0")
+# Move & Home Buttons
+move_button = ttk.Button(hm_frame, text='Absolute Move', command=move_hexapod)
+move_button.grid(row=9, column=0, columnspan=2, pady=(5, 0), sticky=EW)
+ttk.Button(hm_frame, text='Home Hexapod', command=initialize_hexapod).grid(row=10, column=0, columnspan=2, sticky=EW)
 
-# U Entry
-u_entry_label = ttk.Label(hm_frame, text='U:')
-u_entry_label.grid(row=6, column=0, sticky='w')
-u_entry = ttk.Entry(hm_frame, width=5) # 'show='0.0'' is likely not what you want. It's for password-like entries.
-u_entry.grid(row=6, column=1, sticky='w')
-u_entry.insert(0, "0")
+# ------------------------------
+# Relative Movement Control Pad
+# ------------------------------
+rhm_frame = ttk.Frame(hm_frame)
+rhm_frame.grid(row=3, column=2, rowspan=8, padx=(15, 0), sticky="n")
 
-# V Entry
-v_entry_label = ttk.Label(hm_frame, text='V:')
-v_entry_label.grid(row=7, column=0, sticky='w')
-v_entry = ttk.Entry(hm_frame, width=5)
-v_entry.grid(row=7, column=1, sticky='w')
-v_entry.insert(0, "0")
+# Translational Movement (X/Y/Z)
+ttk.Button(rhm_frame, text='↑', width=3).grid(row=0, column=1, padx=1, pady=1)        # Y+
+ttk.Button(rhm_frame, text='←', width=3).grid(row=1, column=0, padx=1, pady=1)        # X-
+ttk.Button(rhm_frame, text='●', width=3).grid(row=1, column=1, padx=1, pady=1)        # Center/Stop
+ttk.Button(rhm_frame, text='→', width=3).grid(row=1, column=2, padx=1, pady=1)        # X+
+ttk.Button(rhm_frame, text='↓', width=3).grid(row=2, column=1, padx=1, pady=1)        # Y-
+ttk.Button(rhm_frame, text='Z↑', width=3).grid(row=0, column=3, padx=(6, 1), pady=1)  # Z+
+ttk.Button(rhm_frame, text='Z↓', width=3).grid(row=2, column=3, padx=(6, 1), pady=1)  # Z-
 
-# W Entry
-w_entry_label = ttk.Label(hm_frame, text='W:')
-w_entry_label.grid(row=8, column=0, sticky='w')
-w_entry = ttk.Entry(hm_frame, width=5)
-w_entry.grid(row=8, column=1, sticky='w')
-w_entry.insert(0, "0")
+# Spacer
+ttk.Label(rhm_frame, text='').grid(row=3, column=0)
 
-# Move Button
-move_button = ttk.Button(hm_frame, text='Move', command=move_hexapod)
-move_button.grid(row=9, columnspan=2)
+# Rotational Movement (U/V/W)
+ttk.Label(rhm_frame, text='Tilt').grid(row=4, column=0, columnspan=4, pady=(5, 2))
+
+rot_width = 8
+ttk.Button(rhm_frame, text='↺ Left', width=rot_width).grid(row=5, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='Right ↻', width=rot_width).grid(row=5, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='Back ⤴', width=rot_width).grid(row=6, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='Front ⤵', width=rot_width).grid(row=6, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='θ CCW', width=rot_width).grid(row=7, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='θ CW', width=rot_width).grid(row=7, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
+
+# ------------------------------
+# Step Size Entry (Translation Increment)
+# ------------------------------
+ttk.Label(rhm_frame, text="Step (mm)").grid(row=8, column=0, columnspan=4, pady=(6, 2))
+hexapod_step_entry = ttk.Entry(rhm_frame, width=6, justify="center")
+hexapod_step_entry.grid(row=9, column=0, columnspan=4)
+hexapod_step_entry.insert(0, "1")  # Default increment
+
+# Force equal column weight for alignment
+for col in range(4):
+    rhm_frame.grid_columnconfigure(col, weight=1)
+
 
 #########################################################################
 #########################################################################
@@ -245,8 +298,8 @@ def plot():
     fig = Figure(figsize=(5, 5), dpi=100)
     ax = fig.add_subplot(111, projection='3d')
     ax.add_collection3d(Poly3DCollection(your_mesh.vectors, 
-                                         facecolors='lightblue',
-                                         edgecolors='gray',
+                                         facecolors='lightgreen',
+                                         edgecolors='black',
                                          linewidths=0.2,
                                          alpha=0.9))
     scale = your_mesh.points.flatten()
@@ -256,7 +309,7 @@ def plot():
     ax.set_zlabel('Z')
     canvas = FigureCanvasTkAgg(fig, plot_frame)
     canvas.draw()
-    canvas.get_tk_widget().grid(row=0, column=0)
+    canvas.get_tk_widget().grid(row=1, column=0)
 plot_button = ttk.Button(plot_frame, command=plot, text="plot")
 plot_button.grid(row=5, column=0)
 
