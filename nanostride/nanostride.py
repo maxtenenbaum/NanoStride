@@ -1,11 +1,15 @@
 from tkinter import *
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 from tkinter import ttk
 import gui_utils
 import motion_utils
+import laser_utils
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-
+from mpl_toolkits.mplot3d.art3d import Poly3DCollection
+from stl import mesh
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 # HELPER FUNCTIONS
 def set_light(canvas, color):
@@ -120,7 +124,145 @@ def move_hexapod():
             for axis in entry_vars
         }
     hexapod.move_hexapod(get_desired_positions())
+def relative_move_hexapod(axis):
+    hexapod_positions = hexapod.get_hexapod_pos()
+    step = float(hexapod_step_entry.get())
+    if axis == "+X":
+        hexapod_positions['X'] += step
+    elif axis == "-X":
+        hexapod_positions['X'] -= step
+    elif axis == "+Y":
+        hexapod_positions['Y'] += step
+    elif axis == "-Y":
+        hexapod_positions['Y'] -= step
+    elif axis == "+Z":
+        hexapod_positions['Z'] += step
+    elif axis == "-Z":
+        hexapod_positions['Z'] -= step
+    elif axis == "+U":
+        hexapod_positions['U'] += step
+    elif axis == "-U":
+        hexapod_positions['U'] -= step
+    elif axis == "+V":
+        hexapod_positions['V'] += step
+    elif axis == "-V":
+        hexapod_positions['V'] -= step
+    elif axis == "+W":
+        hexapod_positions['W'] += step
+    elif axis == "-W":
+        hexapod_positions['W'] -= step
+    hexapod.move_hexapod(hexapod_positions)
 
+# Laser
+shutter_state = "OFF"
+def update_shutter_indicator(state):
+    def draw_star(x, y, size, color, tag):
+        points = [
+            x, y - size,
+            x + size * 0.4, y - size * 0.4,
+            x + size, y,
+            x + size * 0.4, y + size * 0.4,
+            x, y + size,
+            x - size * 0.4, y + size * 0.4,
+            x - size, y,
+            x - size * 0.4, y - size * 0.4,
+        ]
+        shutter_light.create_polygon(points, fill=color, outline=color, tags=tag)
+        radius = size * 0.3
+        shutter_light.create_oval(
+            x - radius, y - radius,
+            x + radius, y + radius,
+            fill="yellow" if color == "red" else "black",
+            outline="yellow" if color == "red" else "black",
+            width=1, tags=tag
+        )
+
+    shutter_light.delete("beam")  
+    # Emitter box
+    shutter_light.create_rectangle(2, 6, 10, 14, fill="gray20", tags="emitter")
+    
+    # Laser beam
+    color = "red" if state == "ON" else "black"
+    shutter_light.create_line(10, 10, 28, 10, fill=color, width=5, tags="beam")
+    
+    # Star at end of beam
+    if state == "ON":
+        draw_star(32, 10, 6, "red", "beam")
+def toggle_shutter():
+    global shutter_state
+    shutter_state = "ON" if shutter_state == "OFF" else "OFF"
+    update_shutter_indicator(shutter_state)
+    laser_utils.toggle_shutter(shutter_state)
+
+# Resonant mirror
+rsm_state = "OFF"
+scan_y, scan_direction = 2, 1
+def update_rsm_indicator():
+    global scan_y, scan_direction
+    rsm_light.delete("all")
+    color = "red" if rsm_state == "ON" else "black"
+    rsm_light.create_line(0, 10, 15, 10, fill=color, width=3)
+    rsm_light.create_rectangle(15, 7, 21, 13, fill="silver")
+    end_y = scan_y if rsm_state == "ON" else 2
+    rsm_light.create_line(18, 10, 40, end_y, fill=color, width=3)
+    if rsm_state == "ON":
+        scan_y += scan_direction * 2
+        if scan_y >= 18 or scan_y <= 2:
+            scan_direction *= -1
+        rsm_light.after(50, update_rsm_indicator)
+def toggle_rsm():
+    global rsm_state
+    rsm_state = "OFF" if rsm_state == "ON" else "ON"
+    update_rsm_indicator()
+    laser_utils.toggle_resonance_scanner(rsm_state)
+
+# Galvo mirror
+galvo_state = "OFF"
+scan_x, scan_x_direction = 2, 1
+def update_galvo_indicator():
+    global scan_x, scan_x_direction
+    galvo_light.delete("all")
+    color = "red" if galvo_state == "ON" else "black"
+    galvo_light.create_line(0, 10, 15, 10, fill=color, width=3)
+    galvo_light.create_rectangle(15, 7, 21, 13, fill="silver")
+    end_x = scan_x if galvo_state == "ON" else 2
+    galvo_light.create_line(18, 10, 40, end_x, fill=color, width=3)
+    if galvo_state == "ON":
+        scan_x += scan_x_direction * 2
+        if scan_x >= 18 or scan_x <= 2:
+            scan_x_direction *= -1
+        galvo_light.after(50, update_galvo_indicator)
+def toggle_galvo():
+    global galvo_state
+    galvo_state = "OFF" if galvo_state == "ON" else "ON"
+    update_galvo_indicator()
+
+# File processing
+file_path = None
+def open_stl():
+    global file_path
+    file_path = filedialog.askopenfilename(title="Select a file", filetypes=[("STL files", "*.stl")])
+def plot():
+    try:
+        if file_path is not None:
+            your_mesh = mesh.Mesh.from_file(file_path)
+            fig = Figure(figsize=(5, 5), dpi=100)
+            ax = fig.add_subplot(111, projection='3d')
+            ax.add_collection3d(Poly3DCollection(your_mesh.vectors, 
+                                                facecolors='lightgreen',
+                                                edgecolors='black',
+                                                linewidths=0.2,
+                                                alpha=0.9))
+            scale = your_mesh.points.flatten()
+            ax.auto_scale_xyz(scale, scale, scale)
+            ax.set_xlabel('X')
+            ax.set_ylabel('Y')
+            ax.set_zlabel('Z')
+            canvas = FigureCanvasTkAgg(fig, plot_frame)
+            canvas.draw()
+            canvas.get_tk_widget().grid(row=1, column=0)
+    except Exception as e:
+        print(e)
 #########################################################################
 #########################################################################
 
@@ -134,21 +276,21 @@ root.title("NanoStride")
 
 mc_frame = ttk.Frame(root, padding=10)
 mc_frame.grid(column=0, row=0,sticky=W)
-ttk.Label(mc_frame, text="Device Selection").grid(row=0, column=0, sticky=W)
+ttk.Label(mc_frame, text="Device Selection", font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=W)
 #########################################################################
 # Connection frame
 #########################################################################
-connection_frame = ttk.Frame(mc_frame, padding=10, relief="solid", borderwidth=1)
-connection_frame.grid(row=1, column=0)
+connection_frame = ttk.Frame(mc_frame, padding=10, relief='groove')
+connection_frame.grid(row=1, column=0, sticky=W)
 ttk.Label(connection_frame, text='Stages: ').grid(row=1, column=0, sticky=W)
-stage_port = ttk.Combobox(connection_frame, values=gui_utils.list_com_ports())
+stage_port = ttk.Combobox(connection_frame, values=gui_utils.list_com_ports(), width=3)
 stage_port.grid(row=1, column=1, sticky=W, pady=2)
 stage_light = Canvas(connection_frame, width=20, height=20, highlightthickness=0)
 stage_light.grid(row=1, column=3, padx=5)
 stage_light.create_oval(2, 2, 18, 18, fill="", tags="light")
 
 ttk.Label(connection_frame, text="Hexapod: ").grid(row=2, column=0, sticky=W)
-hexapod_port = ttk.Combobox(connection_frame, values=gui_utils.list_com_ports())
+hexapod_port = ttk.Combobox(connection_frame, values=gui_utils.list_com_ports(), width=3)
 hexapod_port.grid(row=2, column=1, sticky=W, pady=2)
 hexapod_light = Canvas(connection_frame, width=20, height=20, highlightthickness=0)
 hexapod_light.grid(row=2, column=3, padx=5)
@@ -159,17 +301,17 @@ ttk.Button(connection_frame, text='Connect', command=connect_hexapod).grid(row=2
 #########################################################################
 # Movement frame, with two frames inside, one for each
 #########################################################################
-movement_frame = ttk.Frame(mc_frame, padding=10, relief="solid", borderwidth=1)
-movement_frame.grid(row=2, column=0)
+movement_frame = ttk.Frame(mc_frame, padding=10)
+movement_frame.grid(row=2, column=0, sticky=W)
 
-sm_frame = ttk.Frame(movement_frame, relief="solid", borderwidth=1)
-sm_frame.grid(row=1, column=0)
+sm_frame = ttk.Frame(movement_frame, relief='groove', padding=10)
+sm_frame.grid(row=1, column=0, sticky=W)
 
-hm_frame = ttk.Frame(movement_frame, relief="solid", borderwidth=1)
-hm_frame.grid(row=3, column=0)
+hm_frame = ttk.Frame(movement_frame, relief='groove', padding=10)
+hm_frame.grid(row=3, column=0, sticky=W)
 
 # Absolute Stage Movements
-ttk.Label(movement_frame, text='Stage Movement').grid(row=0, column=0, sticky=W, pady=(0, 5))
+ttk.Label(movement_frame, text='Stage Movement', font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=W, pady=(0, 5))
 
 ttk.Label(sm_frame, text='Position:').grid(row=0, column=0, sticky=W, padx=(0, 5))
 stage_position_label = ttk.Label(sm_frame, text="X: ---, Y: ---")
@@ -188,7 +330,9 @@ stage_y_entry.insert(0, "0")
 ttk.Button(sm_frame, command=move_stage, text='Absolute Move').grid(
     row=3, column=0, columnspan=2, pady=(5, 0), sticky=EW
 )
-
+ttk.Button(sm_frame, command=initialize_stages, text='Initialize').grid(
+    row=4, column=0, columnspan=2, pady=(5, 0), sticky=EW
+)
 # Relative Stage Movements
 rsm_frame = ttk.Frame(sm_frame)
 rsm_frame.grid(row=1, column=2, rowspan=4, padx=(10, 0), sticky="n")
@@ -211,13 +355,13 @@ stage_step_entry.grid(row=4, column=0, columnspan=3)
 stage_step_entry.insert(0, "1")  # Default increment
 
 # Hexapod movements
-ttk.Label(movement_frame, text='Hexapod Movement').grid(row=2, column=0, sticky=W, pady=(10, 5))
+ttk.Label(movement_frame, text='Hexapod Movement', font=("Arial", 10, "bold")).grid(row=2, column=0, sticky=W, pady=(10, 5))
 
 ttk.Label(hm_frame, text='Position').grid(row=0, column=0, sticky=W)
 hexapod_position_label = ttk.Label(hm_frame, text="X: ---, Y: ---, Z: ---\nU: ---, V: ---, W: ---")
 hexapod_position_label.grid(row=0, column=1, sticky=W, columnspan=2)
 
-ttk.Label(hm_frame, text='Move to Position').grid(row=2, column=0, sticky=W)
+ttk.Label(hm_frame, text='Move to Position').grid(row=2, column=0, columnspan=3, sticky=W)
 
 # Absolute Position Entries
 entries = [
@@ -244,13 +388,13 @@ rhm_frame = ttk.Frame(hm_frame)
 rhm_frame.grid(row=3, column=2, rowspan=8, padx=(15, 0), sticky="n")
 
 # Translational Movement (X/Y/Z)
-ttk.Button(rhm_frame, text='↑', width=3).grid(row=0, column=1, padx=1, pady=1)        # Y+
-ttk.Button(rhm_frame, text='←', width=3).grid(row=1, column=0, padx=1, pady=1)        # X-
-ttk.Button(rhm_frame, text='●', width=3).grid(row=1, column=1, padx=1, pady=1)        # Center/Stop
-ttk.Button(rhm_frame, text='→', width=3).grid(row=1, column=2, padx=1, pady=1)        # X+
-ttk.Button(rhm_frame, text='↓', width=3).grid(row=2, column=1, padx=1, pady=1)        # Y-
-ttk.Button(rhm_frame, text='Z↑', width=3).grid(row=0, column=3, padx=(6, 1), pady=1)  # Z+
-ttk.Button(rhm_frame, text='Z↓', width=3).grid(row=2, column=3, padx=(6, 1), pady=1)  # Z-
+ttk.Button(rhm_frame, text='↑', width=3, command=lambda: relative_move_hexapod("-X")).grid(row=0, column=1, padx=1, pady=1)        # Y+
+ttk.Button(rhm_frame, text='←', width=3, command=lambda: relative_move_hexapod("-Y")).grid(row=1, column=0, padx=1, pady=1)        # X-
+ttk.Button(rhm_frame, text='●', width=3, command=lambda: hexapod.move_hexapod(hexapod.get_hexapod_pos())).grid(row=1, column=1, padx=1, pady=1)  # Center/Stop (no movement)
+ttk.Button(rhm_frame, text='→', width=3, command=lambda: relative_move_hexapod("+Y")).grid(row=1, column=2, padx=1, pady=1)        # X+
+ttk.Button(rhm_frame, text='↓', width=3, command=lambda: relative_move_hexapod("+X")).grid(row=2, column=1, padx=1, pady=1)        # Y-
+ttk.Button(rhm_frame, text='Z↑', width=3, command=lambda: relative_move_hexapod("+Z")).grid(row=0, column=3, padx=(6, 1), pady=1)  # Z+
+ttk.Button(rhm_frame, text='Z↓', width=3, command=lambda: relative_move_hexapod("-Z")).grid(row=2, column=3, padx=(6, 1), pady=1)  # Z-
 
 # Spacer
 ttk.Label(rhm_frame, text='').grid(row=3, column=0)
@@ -259,12 +403,12 @@ ttk.Label(rhm_frame, text='').grid(row=3, column=0)
 ttk.Label(rhm_frame, text='Tilt').grid(row=4, column=0, columnspan=4, pady=(5, 2))
 
 rot_width = 8
-ttk.Button(rhm_frame, text='↺ Left', width=rot_width).grid(row=5, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
-ttk.Button(rhm_frame, text='Right ↻', width=rot_width).grid(row=5, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
-ttk.Button(rhm_frame, text='Back ⤴', width=rot_width).grid(row=6, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
-ttk.Button(rhm_frame, text='Front ⤵', width=rot_width).grid(row=6, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
-ttk.Button(rhm_frame, text='θ CCW', width=rot_width).grid(row=7, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
-ttk.Button(rhm_frame, text='θ CW', width=rot_width).grid(row=7, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='↺ Left', width=rot_width, command=lambda: relative_move_hexapod("+U")).grid(row=5, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='Right ↻', width=rot_width, command=lambda: relative_move_hexapod("-U")).grid(row=5, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='Back ⤴', width=rot_width, command=lambda: relative_move_hexapod("-V")).grid(row=6, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='Front ⤵', width=rot_width, command=lambda: relative_move_hexapod("+V")).grid(row=6, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='θ CCW', width=rot_width, command=lambda: relative_move_hexapod("+W")).grid(row=7, column=0, padx=1, pady=1, columnspan=2, sticky="ew")
+ttk.Button(rhm_frame, text='θ CW', width=rot_width, command=lambda: relative_move_hexapod("-W")).grid(row=7, column=2, padx=1, pady=1, columnspan=2, sticky="ew")
 
 # ------------------------------
 # Step Size Entry (Translation Increment)
@@ -278,38 +422,61 @@ hexapod_step_entry.insert(0, "1")  # Default increment
 for col in range(4):
     rhm_frame.grid_columnconfigure(col, weight=1)
 
+#########################################################################
+# Laser control
+#########################################################################
+laser_frame = ttk.Frame(root, padding=10)
+laser_frame.grid(column=1, row=0, sticky=NW)
+ttk.Label(laser_frame, text='Laser Control', font=("Arial", 10, "bold")).grid(row=0, column=0, sticky=W)
+
+# Optics frame
+optics_frame = ttk.Frame(laser_frame, relief='groove', padding=10)
+optics_frame.grid(row=1, column=0, sticky=W)
+# Shutter control
+shutter_light = Canvas(optics_frame, width=50, height=20, highlightthickness=0)
+shutter_light.grid(row=1, column=1, padx=5)
+ttk.Button(optics_frame, text='Shutter', command=toggle_shutter, width=15).grid(row=1, column=0)
+update_shutter_indicator(shutter_state)
+
+# Mirror control
+rsm_light = Canvas(optics_frame, width=50, height=20, highlightthickness=0)
+rsm_light.grid(row=2, column=1, padx=5)
+ttk.Button(optics_frame, text="Resonant Mirror", command=toggle_rsm, width=15).grid(row=2, column=0)
+update_rsm_indicator()
+
+# Slow scan control
+galvo_light = Canvas(optics_frame, width=50, height=20, highlightthickness=0)
+galvo_light.grid(row=3, column=1)
+ttk.Button(optics_frame, text="Y Galvo", command=toggle_galvo, width=15).grid(row=3, column=0)
+update_galvo_indicator()
+
+# Placeholder for power settings and calibration
+power_frame = ttk.Frame(laser_frame, padding=10, relief="groove")
+power_frame.grid(row=3, column=0, columnspan=2, pady=5, sticky="ew")
+ttk.Label(power_frame, text="Laser Power Settings", font=("Arial", 10, "bold")).grid(row=0, column=0, columnspan=2, pady=(0, 5))
+ttk.Label(power_frame, text="Power (%)").grid(row=1, column=0, sticky="w")
+ttk.Scale(power_frame, from_=0, to=100, orient="horizontal", length=120).grid(row=1, column=1, padx=5, pady=2)
+ttk.Label(power_frame, text="Wavelength (nm)").grid(row=2, column=0, sticky="w")
+ttk.Combobox(power_frame, values=["800", "850", "900", "950", "1000"], width=8).grid(row=2, column=1, padx=5, pady=2)
+ttk.Button(power_frame, text="Calibrate").grid(row=3, column=0, columnspan=2, pady=(5, 0), sticky="ew")
+Canvas(power_frame, width=20, height=20, highlightthickness=0, background="gray80").grid(row=4, column=0, padx=(0,5), pady=(5,0))
+ttk.Label(power_frame, text="Ready").grid(row=4, column=1, sticky="w", pady=(5,0))
 
 #########################################################################
+# File processing
 #########################################################################
-# PLOTTING FRAME ### root/plot_frame
-#########################################################################
-#########################################################################
+
+file_processing_frame = ttk.Frame(root, padding=10)
+file_processing_frame.grid(column=2, row=0, sticky=NW)
+ttk.Label(file_processing_frame, text="Upload File", font=("Arial", 10, "bold")).grid(row=0, column=0)
+ttk.Button(file_processing_frame, text="Open STL", command=open_stl).grid(row=1, column=0)
+
+###########
+# Plotting
+###########
 plot_frame = ttk.Frame(root, padding=10)
-plot_frame.grid(column=1, row=0, sticky=E)
+plot_frame.grid(column=3, row=0, sticky=E)
 ttk.Label(plot_frame, text="Viewing").grid(row=0, column=0)
-
-from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from stl import mesh
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-
-def plot():
-    your_mesh = mesh.Mesh.from_file(r"C:\Users\max\Desktop\NanoStride\test_files\cube.stl")
-    fig = Figure(figsize=(5, 5), dpi=100)
-    ax = fig.add_subplot(111, projection='3d')
-    ax.add_collection3d(Poly3DCollection(your_mesh.vectors, 
-                                         facecolors='lightgreen',
-                                         edgecolors='black',
-                                         linewidths=0.2,
-                                         alpha=0.9))
-    scale = your_mesh.points.flatten()
-    ax.auto_scale_xyz(scale, scale, scale)
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    canvas = FigureCanvasTkAgg(fig, plot_frame)
-    canvas.draw()
-    canvas.get_tk_widget().grid(row=1, column=0)
 plot_button = ttk.Button(plot_frame, command=plot, text="plot")
 plot_button.grid(row=5, column=0)
 
