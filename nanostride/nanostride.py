@@ -4,12 +4,14 @@ from tkinter import ttk
 import gui_utils
 import motion_utils
 import laser_utils
+import slicer_utils
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from stl import mesh
-from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib.image as mpimg
+import glob
+import os
 
 # HELPER FUNCTIONS
 def set_light(canvas, color):
@@ -242,27 +244,87 @@ file_path = None
 def open_stl():
     global file_path
     file_path = filedialog.askopenfilename(title="Select a file", filetypes=[("STL files", "*.stl")])
+    if file_path is not None:
+        plot()
+
 def plot():
+    global ax
+    if file_path is None:
+        return
+
     try:
-        if file_path is not None:
-            your_mesh = mesh.Mesh.from_file(file_path)
-            fig = Figure(figsize=(5, 5), dpi=100)
-            ax = fig.add_subplot(111, projection='3d')
-            ax.add_collection3d(Poly3DCollection(your_mesh.vectors, 
-                                                facecolors='lightgreen',
-                                                edgecolors='black',
-                                                linewidths=0.2,
-                                                alpha=0.9))
-            scale = your_mesh.points.flatten()
-            ax.auto_scale_xyz(scale, scale, scale)
-            ax.set_xlabel('X')
-            ax.set_ylabel('Y')
-            ax.set_zlabel('Z')
-            canvas = FigureCanvasTkAgg(fig, plot_frame)
-            canvas.draw()
-            canvas.get_tk_widget().grid(row=1, column=0)
+        # clear out the old contents
+        ax.cla()
+
+        # load and draw your mesh
+        your_mesh = mesh.Mesh.from_file(file_path)
+        ax.add_collection3d(Poly3DCollection(
+            your_mesh.vectors,
+            facecolors='lightgreen',
+            edgecolors='black',
+            linewidths=0.2,
+            alpha=0.9
+        ))
+
+        # rescale & label
+        scale = your_mesh.points.flatten()
+        ax.auto_scale_xyz(scale, scale, scale)
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+
+        # redraw the canvas
+        canvas.draw()
     except Exception as e:
+        print("Plot error:", e)
+
+
+# SLICING
+
+def slice():
+    import slicer_finder
+    try:
+        slicer_path = slicer_finder.find_prusaslicer()
+    except FileNotFoundError as e:
         print(e)
+
+    slicer_utils.slice_and_extract(
+        slicer_path=slicer_path,
+        stl_path=file_path,
+        config_path=r'C:\Users\max\Desktop\NanoStride\scripts\config.ini',
+        output_dir='slices_script',
+        extracted_image_dir='temp_slices'
+    )
+
+    show_slices()
+
+image_files = None
+def show_slices():
+    global image_files
+    extracted_image_dir = r"C:\Users\max\Desktop\NanoStride\temp_slices"
+    image_files = sorted(glob.glob(os.path.join(extracted_image_dir, "*.png")))
+    if not image_files:
+        raise RuntimeError(f"No images found")
+        # re-configure the slider to match new number of files
+    max_idx = len(image_files) - 1
+    slider.config(from_=max_idx, to=0)  # top of slider = last slice
+    slider.set(0)                       # start at slice 0
+    show_image(0)
+
+def show_image(idx):
+    if image_files:
+        img = mpimg.imread(image_files[idx])
+        axis.clear()
+        axis.imshow(img)
+        axis.axis("on")           
+        slice_canvas.draw()
+
+# --- slider callback ---
+def on_slider_change(val):
+    idx = int(float(val))
+    show_image(idx)
+
+
 #########################################################################
 #########################################################################
 
@@ -468,17 +530,46 @@ ttk.Label(power_frame, text="Ready").grid(row=4, column=1, sticky="w", pady=(5,0
 
 file_processing_frame = ttk.Frame(root, padding=10)
 file_processing_frame.grid(column=2, row=0, sticky=NW)
-ttk.Label(file_processing_frame, text="Upload File", font=("Arial", 10, "bold")).grid(row=0, column=0)
-ttk.Button(file_processing_frame, text="Open STL", command=open_stl).grid(row=1, column=0)
 
-###########
-# Plotting
-###########
-plot_frame = ttk.Frame(root, padding=10)
-plot_frame.grid(column=3, row=0, sticky=E)
-ttk.Label(plot_frame, text="Viewing").grid(row=0, column=0)
-plot_button = ttk.Button(plot_frame, command=plot, text="plot")
-plot_button.grid(row=5, column=0)
+# Visualization
+fig = Figure(figsize=(5, 5), dpi=100)
+ax = fig.add_subplot(111, projection='3d')
+canvas = FigureCanvasTkAgg(fig, master=file_processing_frame)
+canvas.get_tk_widget().grid(row=0, column=0)
+
+
+# Individual slice vizualising
+slice_fig = Figure(figsize=(5,5), dpi=100, facecolor="#f0f0f0")
+axis = slice_fig.add_subplot(111)
+slice_canvas = FigureCanvasTkAgg(slice_fig, master=file_processing_frame)
+slice_canvas.get_tk_widget().grid(row=0, column=1)
+
+# --- create the slider ---
+slider = ttk.Scale(
+    file_processing_frame,
+    from_=1,    # dummy
+    to=0,       # dummy
+    orient="vertical",
+    command=lambda v: show_image(int(float(v))),
+    length=400
+)
+slider.grid(row=0, column=2, padx=10)
+
+# Slicing frame
+ttk.Label(file_processing_frame, text='Voxelizing', font=("Arial", 10, "bold")).grid(row=1, column=0)
+slicing_frame = ttk.Frame(file_processing_frame, relief='groove', borderwidth=1, padding=10)
+slicing_frame.grid(row=2, column=0)
+ttk.Label(slicing_frame, text="Upload File", font=("Arial", 10, "bold")).grid(row=0, column=0)
+ttk.Button(slicing_frame, text="Open STL", command=open_stl).grid(row=1, column=0)
+
+# Slicing
+ttk.Label(slicing_frame, text="Number of layers").grid(row=0, column=1)
+num_layers = ttk.Entry(slicing_frame).grid(row=1, column=1)
+
+ttk.Label(slicing_frame, text="Layer height (um)").grid(row=0, column=2)
+layer_thickness = ttk.Entry(slicing_frame).grid(row=1, column=2)
+
+ttk.Button(slicing_frame, text="Slice", command=slice).grid(row=0, column=3)
 
 # Disconnect all and close
 ttk.Button(mc_frame, text="Close and Kill", command=close_and_kill).grid(row=3, column=0, columnspan=2, pady=10)
