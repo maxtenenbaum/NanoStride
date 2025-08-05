@@ -8,6 +8,7 @@ skull_slices/
 *.bin
 *.sl1
 *.zip
+*.png
 
 # Environment
 /venv
